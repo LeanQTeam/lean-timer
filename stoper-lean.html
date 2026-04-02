@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d1117">
+<title>LeanTimer</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2064%2064%22%3E%3Crect%20width=%2264%22%20height=%2264%22%20rx=%2214%22%20fill=%22#0d1117%22/%3E%3Ctext%20x=%2232%22%20y=%2244%22%20text-anchor=%22middle%22%20font-family=%22Arial,sans-serif%22%20font-weight=%22700%22%20font-size=%2238%22%20fill=%22#e8b84b%22%3ELt%3C/text%3E%3Crect%20x=%2210%22%20y=%2252%22%20width=%2244%22%20height=%224%22%20rx=%222%22%20fill=%22#e8b84b%22%20opacity=%220.35%22/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%20180%20180%22%3E%3Crect%20width=%22180%22%20height=%22180%22%20rx=%2240%22%20fill=%22#0d1117%22/%3E%3Ctext%20x=%2290%22%20y=%22122%22%20text-anchor=%22middle%22%20font-family=%22Arial,sans-serif%22%20font-weight=%22700%22%20font-size=%22104%22%20fill=%22#e8b84b%22%3ELt%3C/text%3E%3Crect%20x=%2224%22%20y=%22148%22%20width=%22132%22%20height=%228%22%20rx=%224%22%20fill=%22#e8b84b%22%20opacity=%220.3%22/%3E%3C/svg%3E">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+:root{--bg:#0d1117;--surf:#161b22;--surf2:#21262d;--acc:#e8b84b;--red:#c0392b;--green:#3fb950;--text:#e6edf3;--muted:#7d8590;--border:#30363d;--font:'DM Sans',system-ui,sans-serif;--mono:'DM Mono','Courier New',monospace;--r:10px}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100dvh;overflow-x:hidden;font-size:15px}
+.scr{display:none;flex-direction:column;min-height:100dvh}
+.scr.on{display:flex}
+/* HEADER */
+.hdr{display:flex;align-items:center;gap:10px;padding:13px 16px;background:var(--surf);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;flex-shrink:0}
+.logo{width:30px;height:30px;background:var(--acc);border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.logo svg{width:16px;height:16px}
+.hdr-info{flex:1;min-width:0}
+.hdr-info h1{font-size:15px;font-weight:700;letter-spacing:-.3px}
+.hdr-info p{font-size:10px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.back{background:none;border:none;color:var(--acc);font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:3px;padding:4px 0;flex-shrink:0;white-space:nowrap}
+.back svg{width:14px;height:14px}
+/* TABS */
+.tabs{display:flex;background:var(--surf);border-bottom:1px solid var(--border);flex-shrink:0}
+.tab{flex:1;padding:11px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);font-family:var(--font);font-size:11px;font-weight:600;letter-spacing:.5px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;transition:all .2s}
+.tab svg{width:12px;height:12px}
+.tab.on{color:var(--acc);border-bottom-color:var(--acc)}
+.panel{display:none;padding:14px;overflow-y:auto;flex:1}
+.panel.on{display:block}
+/* HOME */
+.body{flex:1;overflow-y:auto;padding:14px}
+.home-hero{text-align:center;padding:36px 0 28px}
+.hero-clock{font-family:var(--mono);font-size:54px;font-weight:500;color:var(--acc);letter-spacing:-3px;line-height:1;margin-bottom:6px}
+.hero-sub{font-size:12px;color:var(--muted)}
+.big-card{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:18px 16px;display:flex;align-items:center;gap:14px;cursor:pointer;margin-bottom:10px;transition:all .18s}
+.big-card:active{transform:scale(.98)}
+.big-card.accent{border-color:rgba(232,184,75,.5);background:rgba(232,184,75,.05)}
+.big-card-ico{width:46px;height:46px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.big-card.accent .big-card-ico{background:var(--acc)}
+.big-card.plain .big-card-ico{background:var(--surf2);border:1px solid var(--border)}
+.big-card-ico svg{width:22px;height:22px}
+.big-card-txt h2{font-size:16px;font-weight:700;margin-bottom:3px}
+.big-card.accent .big-card-txt h2{color:var(--acc)}
+.big-card-txt p{font-size:12px;color:var(--muted);line-height:1.4}
+.pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;margin-left:6px;background:var(--surf2);color:var(--muted);border:1px solid var(--border)}
+/* INPUTS */
+input[type=text]{width:100%;background:var(--surf2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:15px;padding:11px 14px;outline:none;transition:border-color .2s;margin-bottom:8px}
+input[type=text]:last-child{margin-bottom:0}
+input[type=text]:focus{border-color:var(--acc)}
+input[type=text]::placeholder{color:var(--muted)}
+/* BUTTONS */
+.btn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:13px;border-radius:8px;border:none;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.4;pointer-events:none}
+.btn svg{width:15px;height:15px;flex-shrink:0}
+.btn-acc{background:var(--acc);color:#000}
+.btn-red{background:var(--red);color:#fff}
+.btn-sec{background:var(--surf2);color:var(--text);border:1px solid var(--border)}
+.btn-out{background:none;color:var(--muted);border:1px solid var(--border)}
+.btn-sm{padding:7px 11px;font-size:12px;width:auto}
+.btn-row{display:flex;gap:8px;margin-bottom:10px}
+.btn-row .btn{flex:1}
+/* TIMER */
+.timer-box{text-align:center;padding:22px 16px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);margin-bottom:12px}
+.timer-lbl{font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.timer-clk{font-family:var(--mono);font-size:52px;font-weight:500;letter-spacing:-2px;color:var(--acc);line-height:1;margin:6px 0}
+.timer-clk.pulse{animation:pulse 1s ease-in-out infinite alternate}
+@keyframes pulse{from{opacity:1}to{opacity:.8}}
+.timer-st{font-size:11px;color:var(--muted)}
+/* LAP LIST */
+.lap-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.lap-head-l{font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.lap-cnt{font-size:12px;font-weight:700}
+.lap-cnt.warn{color:var(--red)}
+.lap-cnt.ok{color:var(--green)}
+.min-bar{height:3px;background:var(--surf2);border-radius:2px;overflow:hidden;margin-bottom:10px}
+.min-bar-f{height:100%;border-radius:2px;background:var(--red);transition:width .3s,background .3s}
+.min-bar-f.ok{background:var(--green)}
+.lap-list{border:1px solid var(--border);border-radius:var(--r);background:var(--surf2);overflow:hidden;margin-bottom:10px}
+.lap-inner{max-height:250px;overflow-y:auto}
+.lap-row{display:grid;grid-template-columns:28px 1fr 80px 30px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border);gap:6px}
+.lap-row:last-child{border-bottom:none}
+.lap-n{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.lap-t{font-family:var(--mono);font-size:13px;font-weight:500}
+.lap-tot{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:right}
+.lap-del{background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:4px;border-radius:4px;transition:background .15s}
+.lap-del:hover{background:rgba(192,57,43,.2)}
+.lap-del svg{width:13px;height:13px;color:var(--muted)}
+.lap-del:hover svg{color:var(--red)}
+.lap-empty{padding:18px;text-align:center;color:var(--muted);font-size:13px}
+/* OP BADGE */
+.op-badge{display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(232,184,75,.07);border:1px solid rgba(232,184,75,.2);border-radius:var(--r);margin-bottom:10px}
+.op-badge svg{width:13px;height:13px;color:var(--acc);flex-shrink:0}
+.op-badge-n{font-size:13px;font-weight:600;color:var(--acc)}
+.op-badge-s{font-size:11px;color:var(--muted);margin-top:1px}
+/* SEC */
+.sec{font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin:14px 0 8px}
+.sec:first-child{margin-top:0}
+.divider{height:1px;background:var(--border);margin:12px 0}
+/* OP ITEM */
+.op-item{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.op-ico{width:34px;height:34px;background:var(--surf2);border:1px solid var(--border);border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.op-ico svg{width:15px;height:15px;color:var(--acc)}
+.op-info{flex:1;min-width:0}
+.op-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.op-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.icon-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.icon-btn svg{width:13px;height:13px;color:var(--muted)}
+.icon-btn:hover{border-color:var(--red)}
+.icon-btn:hover svg{color:var(--red)}
+/* ARCH ITEM */
+.arch-item{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:13px 14px;display:flex;align-items:center;gap:12px;margin-bottom:8px;cursor:pointer;transition:border-color .2s}
+.arch-item:hover,.arch-item.sel{border-color:var(--acc);background:rgba(232,184,75,.04)}
+.arch-ico{width:36px;height:36px;background:var(--surf2);border:1px solid var(--border);border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.arch-ico svg{width:16px;height:16px;color:var(--acc)}
+.arch-info{flex:1;min-width:0}
+.arch-name{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.arch-meta{font-size:11px;color:var(--muted);margin-top:2px}
+/* REPORT TABLE */
+.tbl-wrap{overflow-x:auto;margin-bottom:12px;border:1px solid var(--border);border-radius:var(--r)}
+table{width:100%;border-collapse:collapse;min-width:460px}
+th{background:var(--surf2);color:var(--muted);font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;padding:9px 11px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:9px 11px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px;color:var(--text);white-space:nowrap}
+tr:last-child td{border-bottom:none}
+.td-name{font-family:var(--font);font-size:12px;font-weight:500;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.td-acc{color:var(--acc);font-weight:600}
+/* DETAIL */
+.det-card{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:13px;margin-bottom:10px}
+/* EMPTY */
+.empty{text-align:center;padding:44px 16px;color:var(--muted)}
+.empty svg{width:38px;height:38px;margin-bottom:10px;opacity:.35}
+.empty p{font-size:14px}
+.empty span{font-size:12px;display:block;margin-top:5px}
+/* TOAST */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surf);border:1px solid var(--border);border-radius:24px;padding:9px 18px;font-size:13px;font-weight:500;z-index:999;transition:transform .3s cubic-bezier(.34,1.56,.64,1);white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.toast.on{transform:translateX(-50%) translateY(0)}
+/* MODAL */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:flex-end;justify-content:center}
+.overlay.on{display:flex}
+.modal{background:var(--surf);border:1px solid var(--border);border-top:1px solid var(--border);border-radius:16px 16px 0 0;padding:20px 16px;width:100%;max-width:500px}
+.modal-title{font-size:15px;font-weight:700;margin-bottom:6px}
+.modal-msg{font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.5}
+.modal-btns{display:flex;gap:8px}
+.modal-btns .btn{flex:1}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════ HOME ══ -->
+<div class="scr on" id="s-home">
+  <div class="hdr">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 15.5"/></svg>
+    </div>
+    <div class="hdr-info"><h1>LeanTimer</h1><p>Pomiar czasu operacji</p></div>
+    <span class="pill" id="archPill" style="display:none">0</span>
+  </div>
+  <div class="body">
+    <div class="home-hero">
+      <div class="hero-clock" id="homeClock">00:00</div>
+      <div class="hero-sub">Wybierz tryb pracy</div>
+    </div>
+    <div class="big-card accent" onclick="goNew()">
+      <div class="big-card-ico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 15.5"/><line x1="12" y1="3" x2="12" y2="1"/><line x1="9" y1="2" x2="15" y2="2"/></svg>
+      </div>
+      <div class="big-card-txt">
+        <h2>Nowy pomiar</h2>
+        <p>Utwórz sesję, mierz czasy operacji i generuj raport</p>
+      </div>
+    </div>
+    <div class="big-card plain" onclick="goArchive()">
+      <div class="big-card-ico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#e8b84b" stroke-width="2" stroke-linecap="round"><path d="M5 3h14a2 2 0 0 1 2 2v1H3V5a2 2 0 0 1 2-2z"/><rect x="3" y="6" width="18" height="15" rx="1"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="13" y2="15"/></svg>
+      </div>
+      <div class="big-card-txt">
+        <h2>Archiwum <span class="pill" id="archPillHome" style="display:none">0</span></h2>
+        <p>Przeglądaj zapisane sesje i pobieraj raporty</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ NOWY POMIAR ══ -->
+<div class="scr" id="s-new">
+  <div class="hdr">
+    <button class="back" onclick="backHome()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Główna
+    </button>
+    <div class="hdr-info" style="text-align:center"><h1>Nowy pomiar</h1><p id="newSessLbl">Sesja aktywna</p></div>
+    <button class="btn btn-acc btn-sm" onclick="saveSession()">Zapisz</button>
+  </div>
+  <div class="tabs">
+    <button class="tab on" id="nt-pomiar" onclick="newTab('pomiar')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 15.5"/></svg>POMIAR
+    </button>
+    <button class="tab" id="nt-operacje" onclick="newTab('operacje')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="9" x2="17" y2="9"/><line x1="7" y1="13" x2="13" y2="13"/></svg>OPERACJE
+    </button>
+    <button class="tab" id="nt-raport" onclick="newTab('raport')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>RAPORT
+    </button>
+  </div>
+
+  <!-- POMIAR -->
+  <div class="panel on" id="np-pomiar">
+    <div id="nSetup">
+      <div class="sec">Nowa operacja</div>
+      <input type="text" id="inOp" placeholder="Nazwa operacji" maxlength="80">
+      <input type="text" id="inSt" placeholder="Nazwa punktu startowego" maxlength="80">
+      <button class="btn btn-acc" onclick="startOp()" style="margin-top:2px">
+        <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Rozpocznij pomiar operacji
+      </button>
+    </div>
+    <div id="nTimer" style="display:none">
+      <div class="op-badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 15.5"/></svg>
+        <div><div class="op-badge-n" id="tOpName">-</div><div class="op-badge-s" id="tOpSt">-</div></div>
+      </div>
+      <div class="timer-box">
+        <div class="timer-lbl">czas bieżącego pomiaru</div>
+        <div class="timer-clk" id="tClk">00:00.00</div>
+        <div class="timer-st" id="tSt">Gotowy — naciśnij START</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-acc" id="btnSP" onclick="timerToggle()">
+          <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>START
+        </button>
+        <button class="btn btn-sec" id="btnLap" onclick="recordLap()" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>LAP
+        </button>
+      </div>
+      <button class="btn btn-red" id="btnFinOp" onclick="finishOp()" disabled style="margin-bottom:12px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+        Zakończ operację i zapisz
+      </button>
+      <div class="lap-head">
+        <span class="lap-head-l">Pomiary</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button class="btn btn-out btn-sm" onclick="confirmClearLaps()">Usuń wszystkie</button>
+          <span class="lap-cnt warn" id="lapCnt">0 / min.10</span>
+        </div>
+      </div>
+      <div class="min-bar"><div class="min-bar-f" id="minF" style="width:0%"></div></div>
+      <div class="lap-list"><div class="lap-inner" id="lapEl"><div class="lap-empty">Brak pomiarów</div></div></div>
+    </div>
+  </div>
+
+  <!-- OPERACJE -->
+  <div class="panel" id="np-operacje">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div class="sec" style="margin:0">Operacje w tej sesji</div>
+      <button class="btn btn-out btn-sm" onclick="confirmClearNewOps()">Usuń wszystkie</button>
+    </div>
+    <div id="nOpsList"></div>
+  </div>
+
+  <!-- RAPORT -->
+  <div class="panel" id="np-raport">
+    <div id="nReport"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════ ARCHIWUM ══ -->
+<div class="scr" id="s-arch">
+  <div class="hdr">
+    <button class="back" onclick="backHome()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Główna
+    </button>
+    <div class="hdr-info" style="text-align:center"><h1>Archiwum</h1><p id="archSelLbl">Wybierz sesję</p></div>
+    <div style="width:60px"></div>
+  </div>
+  <div class="tabs">
+    <button class="tab on" id="at-sesje" onclick="archTab('sesje')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 3h14a2 2 0 0 1 2 2v1H3V5a2 2 0 0 1 2-2z"/><rect x="3" y="6" width="18" height="15" rx="1"/></svg>SESJE
+    </button>
+    <button class="tab" id="at-operacje" onclick="archTab('operacje')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="9" x2="17" y2="9"/><line x1="7" y1="13" x2="13" y2="13"/></svg>OPERACJE
+    </button>
+    <button class="tab" id="at-raport" onclick="archTab('raport')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>RAPORT
+    </button>
+  </div>
+
+  <!-- SESJE -->
+  <div class="panel on" id="ap-sesje">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div class="sec" style="margin:0">Zapisane sesje</div>
+      <button class="btn btn-out btn-sm" onclick="confirmClearAllSess()">Usuń wszystkie</button>
+    </div>
+    <div id="aSesjeLst"></div>
+  </div>
+
+  <!-- OPERACJE -->
+  <div class="panel" id="ap-operacje">
+    <div id="aOpsLst"></div>
+  </div>
+
+  <!-- RAPORT -->
+  <div class="panel" id="ap-raport">
+    <div id="aReport"></div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="overlay" id="overlay" onclick="closeModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title" id="mTitle">Potwierdzenie</div>
+    <div class="modal-msg" id="mMsg"></div>
+    <div class="modal-btns">
+      <button class="btn btn-sec" onclick="closeModal()">Anuluj</button>
+      <button class="btn btn-red" id="mOk">Usuń</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────
+let archive = JSON.parse(localStorage.getItem('lt_arch') || '[]');
+// archive: [{id,name,date,ops:[{id,opName,startPoint,laps:[ms],date}]}]
+
+let activeSess = {name:'',ops:[]};
+let curOp = null;
+let tmr = {running:false,lapStartTs:0,lapOffset:0,raf:null};
+let archSelId = null;
+
+// ── HOME CLOCK ─────────────────────────────────────────────
+(function tick(){
+  const d=new Date();
+  document.getElementById('homeClock').textContent=pad(d.getHours())+':'+pad(d.getMinutes());
+  setTimeout(tick,1000);
+})();
+
+// ── SCREENS ────────────────────────────────────────────────
+function show(id){document.querySelectorAll('.scr').forEach(s=>s.classList.remove('on'));document.getElementById(id).classList.add('on')}
+
+function goNew(){
+  activeSess={name:'Sesja '+new Date().toLocaleString('pl-PL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}),ops:[]};
+  curOp=null; stopTmr();
+  document.getElementById('nSetup').style.display='block';
+  document.getElementById('nTimer').style.display='none';
+  document.getElementById('inOp').value='';
+  document.getElementById('inSt').value='';
+  document.getElementById('newSessLbl').textContent=activeSess.name;
+  newTab('pomiar'); renderNOps(); show('s-new');
+}
+
+function goArchive(){
+  archSelId=null;
+  document.getElementById('archSelLbl').textContent='Wybierz sesję';
+  renderASesje(); renderAOps(); renderAReport(); archTab('sesje'); show('s-arch');
+}
+
+function backHome(){stopTmr();updBadges();show('s-home')}
+
+// ── TABS ────────────────────────────────────────────────────
+function newTab(t){
+  ['pomiar','operacje','raport'].forEach(x=>{
+    document.getElementById('nt-'+x).classList.toggle('on',x===t);
+    document.getElementById('np-'+x).classList.toggle('on',x===t);
+  });
+  if(t==='operacje')renderNOps();
+  if(t==='raport')renderNReport();
+}
+
+function archTab(t){
+  ['sesje','operacje','raport'].forEach(x=>{
+    document.getElementById('at-'+x).classList.toggle('on',x===t);
+    document.getElementById('ap-'+x).classList.toggle('on',x===t);
+  });
+}
+
+// ── NEW SESSION — START OP ─────────────────────────────────
+function startOp(){
+  const opName=document.getElementById('inOp').value.trim();
+  const stPt=document.getElementById('inSt').value.trim();
+  if(!opName){toast('Podaj nazwę operacji');return}
+  if(!stPt){toast('Podaj punkt startowy');return}
+  curOp={id:Date.now(),opName,startPoint:stPt,laps:[],date:new Date().toISOString()};
+  tmr={running:false,lapStartTs:0,lapOffset:0,raf:null};
+  document.getElementById('tOpName').textContent=opName;
+  document.getElementById('tOpSt').textContent='Start: '+stPt;
+  document.getElementById('tClk').textContent='00:00.00';
+  document.getElementById('tSt').textContent='Gotowy — naciśnij START';
+  document.getElementById('btnSP').innerHTML=iPlay()+' START';
+  document.getElementById('btnLap').disabled=true;
+  document.getElementById('btnFinOp').disabled=true;
+  document.getElementById('tClk').classList.remove('pulse');
+  document.getElementById('nSetup').style.display='none';
+  document.getElementById('nTimer').style.display='block';
+  renderLaps(); updLapCnt();
+}
+
+// ── TIMER ──────────────────────────────────────────────────
+function timerToggle(){
+  if(!tmr.running){
+    const now=performance.now();
+    tmr.lapStartTs=now-tmr.lapOffset;
+    tmr.lapOffset=0; tmr.running=true;
+    document.getElementById('btnSP').innerHTML=iPause()+' PAUSE';
+    document.getElementById('btnLap').disabled=false;
+    document.getElementById('tSt').textContent='Pomiar trwa — naciśnij LAP';
+    document.getElementById('tClk').classList.add('pulse');
+    loopTmr();
+  } else {
+    tmr.lapOffset=performance.now()-tmr.lapStartTs;
+    tmr.running=false; cancelAnimationFrame(tmr.raf);
+    document.getElementById('btnSP').innerHTML=iPlay()+' WZNÓW';
+    document.getElementById('tSt').textContent='Wstrzymany';
+    document.getElementById('tClk').classList.remove('pulse');
+  }
+}
+function loopTmr(){
+  if(!tmr.running)return;
+  document.getElementById('tClk').textContent=fmt(performance.now()-tmr.lapStartTs);
+  tmr.raf=requestAnimationFrame(loopTmr);
+}
+function stopTmr(){tmr.running=false;cancelAnimationFrame(tmr.raf);}
+
+function recordLap(){
+  if(!tmr.running)return;
+  const now=performance.now();
+  const ms=now-tmr.lapStartTs;
+  tmr.lapStartTs=now; tmr.lapOffset=0;
+  curOp.laps.push(ms);
+  renderLaps(); updLapCnt();
+  document.getElementById('tClk').textContent='00:00.00';
+  toast('Pomiar #'+curOp.laps.length+' zarejestrowany');
+}
+
+function finishOp(){
+  if(curOp.laps.length<10){toast('Minimum 10 pomiarów! Masz: '+curOp.laps.length);return}
+  stopTmr();
+  activeSess.ops.push({...curOp,laps:[...curOp.laps]});
+  toast('Operacja "'+curOp.opName+'" zapisana');
+  curOp=null;
+  document.getElementById('nSetup').style.display='block';
+  document.getElementById('nTimer').style.display='none';
+  document.getElementById('inOp').value='';
+  document.getElementById('inSt').value='';
+  renderNOps();
+}
+
+// ── LAPS ───────────────────────────────────────────────────
+function deleteLap(i){
+  curOp.laps.splice(i,1);
+  renderLaps(); updLapCnt(); toast('Pomiar usunięty');
+}
+
+function confirmClearLaps(){
+  if(!curOp||!curOp.laps.length)return;
+  modal('Usuń wszystkie pomiary','Usunąć wszystkie '+curOp.laps.length+' pomiarów?',()=>{
+    curOp.laps=[];renderLaps();updLapCnt();toast('Pomiary usunięte');
+  });
+}
+
+function renderLaps(){
+  const el=document.getElementById('lapEl');
+  if(!curOp||!curOp.laps.length){el.innerHTML='<div class="lap-empty">Brak pomiarów — naciśnij LAP</div>';return}
+  let tot=0;
+  const rows=curOp.laps.map((ms,i)=>{tot+=ms;return `<div class="lap-row">
+    <span class="lap-n">${i+1}</span>
+    <span class="lap-t">${fmt(ms)}</span>
+    <span class="lap-tot">${fmt(tot)}</span>
+    <button class="lap-del" onclick="deleteLap(${i})">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+    </button></div>`;}).reverse().join('');
+  el.innerHTML=`<div class="lap-row" style="border-bottom:1px solid var(--border)">
+    <span style="font-size:9px;color:var(--muted)">#</span>
+    <span style="font-size:9px;color:var(--muted);letter-spacing:.5px">SPLIT</span>
+    <span style="font-size:9px;color:var(--muted);letter-spacing:.5px;text-align:right">ŁĄCZNIE</span>
+    <span></span></div>`+rows;
+}
+
+function updLapCnt(){
+  const n=curOp?curOp.laps.length:0;
+  const pct=Math.min(100,n/10*100);
+  document.getElementById('lapCnt').textContent=n>=10?n+' pomiarów ✓':n+' / min.10';
+  document.getElementById('lapCnt').className='lap-cnt '+(n>=10?'ok':'warn');
+  document.getElementById('minF').style.width=pct+'%';
+  document.getElementById('minF').className='min-bar-f'+(n>=10?' ok':'');
+  document.getElementById('btnFinOp').disabled=n<10;
+}
+
+// ── NEW SESSION — OPS TAB ──────────────────────────────────
+function renderNOps(){
+  const el=document.getElementById('nOpsList');
+  if(!activeSess.ops.length){
+    el.innerHTML=`<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="9" x2="17" y2="9"/></svg><p>Brak operacji</p><span>Dodaj operację na karcie Pomiar</span></div>`;
+    return;
+  }
+  el.innerHTML=activeSess.ops.map((op,i)=>{
+    const st=stats(op.laps);
+    return `<div class="op-item">
+      <div class="op-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 15.5"/></svg></div>
+      <div class="op-info">
+        <div class="op-name">${esc(op.opName)}</div>
+        <div class="op-meta">${esc(op.startPoint)} · ${op.laps.length} pomiarów · śr. ${fmt(st.mean)}</div>
+      </div>
+      <button class="icon-btn" onclick="confirmDelNOp(${i})">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function confirmDelNOp(i){
+  modal('Usuń operację','Usunąć operację "'+activeSess.ops[i].opName+'"?',()=>{
+    activeSess.ops.splice(i,1);renderNOps();toast('Operacja usunięta');
+  });
+}
+
+function confirmClearNewOps(){
+  if(!activeSess.ops.length)return;
+  modal('Usuń wszystkie operacje','Usunąć wszystkie '+activeSess.ops.length+' operacje z tej sesji?',()=>{
+    activeSess.ops=[];renderNOps();toast('Operacje usunięte');
+  });
+}
+
+// ── NEW SESSION — REPORT TAB ───────────────────────────────
+function renderNReport(){
+  const ops=activeSess.ops.filter(o=>o.laps.length>=10);
+  document.getElementById('nReport').innerHTML=ops.length?buildReport(ops,'new'):emptyReport();
+}
+
+// ── SAVE TO ARCHIVE ────────────────────────────────────────
+function saveSession(){
+  const ops=activeSess.ops.filter(o=>o.laps.length>=10);
+  if(!ops.length){toast('Brak operacji z min. 10 pomiarami');return}
+  modal('Zapisz sesję','Zapisać sesję "'+activeSess.name+'" z '+ops.length+' operacjami do archiwum?',()=>{
+    archive.push({id:Date.now(),name:activeSess.name,date:new Date().toISOString(),ops});
+    saveArch(); updBadges(); toast('Sesja zapisana w archiwum'); backHome();
+  },'Zapisz','btn-acc');
+}
+
+// ── ARCHIVE — SESJE ────────────────────────────────────────
+function renderASesje(){
+  const el=document.getElementById('aSesjeLst');
+  if(!archive.length){
+    el.innerHTML=`<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 3h14a2 2 0 0 1 2 2v1H3V5a2 2 0 0 1 2-2z"/><rect x="3" y="6" width="18" height="15" rx="1"/></svg><p>Brak sesji w archiwum</p><span>Zapisz sesję po zakończeniu pomiaru</span></div>`;
+    return;
+  }
+  el.innerHTML=archive.map(s=>{
+    const d=new Date(s.date);
+    const ds=d.toLocaleDateString('pl-PL')+' '+d.toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'});
+    return `<div class="arch-item${archSelId===s.id?' sel':''}" onclick="selSess(${s.id})">
+      <div class="arch-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 3h14a2 2 0 0 1 2 2v1H3V5a2 2 0 0 1 2-2z"/><rect x="3" y="6" width="18" height="15" rx="1"/></svg></div>
+      <div class="arch-info">
+        <div class="arch-name">${esc(s.name)}</div>
+        <div class="arch-meta">${ds} · ${s.ops.length} operacji</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        ${archSelId===s.id?'<span style="font-size:10px;color:var(--acc)">Wybrana</span>':''}
+        <button class="icon-btn" onclick="event.stopPropagation();confirmDelSess(${s.id})">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function selSess(id){
+  archSelId=id;
+  const s=archive.find(x=>x.id===id);
+  document.getElementById('archSelLbl').textContent=s?s.name:'Wybierz sesję';
+  renderASesje(); renderAOps(); renderAReport(); archTab('operacje');
+}
+
+function confirmDelSess(id){
+  const s=archive.find(x=>x.id===id);
+  modal('Usuń sesję','Usunąć sesję "'+(s?s.name:'')+'"?',()=>{
+    archive=archive.filter(x=>x.id!==id);
+    if(archSelId===id){archSelId=null;document.getElementById('archSelLbl').textContent='Wybierz sesję';}
+    saveArch(); updBadges(); renderASesje(); renderAOps(); renderAReport(); toast('Sesja usunięta');
+  });
+}
+
+function confirmClearAllSess(){
+  if(!archive.length)return;
+  modal('Usuń całe archiwum','Usunąć wszystkie '+archive.length+' sesje? Operacji nie można cofnąć.',()=>{
+    archive=[];archSelId=null;saveArch();updBadges();
+    document.getElementById('archSelLbl').textContent='Wybierz sesję';
+    renderASesje();renderAOps();renderAReport();toast('Archiwum wyczyszczone');
+  });
+}
+
+// ── ARCHIVE — OPS ──────────────────────────────────────────
+function renderAOps(){
+  const el=document.getElementById('aOpsLst');
+  if(!archSelId){el.innerHTML=noSel();return}
+  const s=archive.find(x=>x.id===archSelId);
+  if(!s){el.innerHTML='';return}
+  el.innerHTML=`<div class="sec">${esc(s.name)}</div>`+s.ops.map(op=>{
+    const st=stats(op.laps);
+    return `<div class="op-item">
+      <div class="op-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 15.5"/></svg></div>
+      <div class="op-info">
+        <div class="op-name">${esc(op.opName)}</div>
+        <div class="op-meta">${esc(op.startPoint)} · ${op.laps.length} pomiarów · śr. ${fmt(st.mean)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── ARCHIVE — REPORT ───────────────────────────────────────
+function renderAReport(){
+  const el=document.getElementById('aReport');
+  if(!archSelId){el.innerHTML=noSel();return}
+  const s=archive.find(x=>x.id===archSelId);
+  if(!s){el.innerHTML='';return}
+  el.innerHTML=buildReport(s.ops,'arch_'+s.id);
+}
+
+// ── REPORT BUILDER ─────────────────────────────────────────
+function buildReport(ops,key){
+  const tRows=ops.map(op=>{
+    const st=stats(op.laps);
+    return `<tr>
+      <td class="td-name">${esc(op.opName)}</td>
+      <td class="td-name">${esc(op.startPoint)}</td>
+      <td>${op.laps.length}</td>
+      <td class="td-acc">${fmt(st.mean)}</td>
+      <td>${fmt(st.median)}</td>
+      <td>${fmt(st.p98)}</td>
+      <td>${fmt(st.trim)}</td>
+    </tr>`;
+  }).join('');
+
+  const details=ops.map(op=>{
+    const st=stats(op.laps);
+    const lRows=op.laps.map((ms,i)=>`<div class="lap-row">
+      <span class="lap-n">${i+1}</span>
+      <span class="lap-t">${fmt(ms)}</span>
+      <span class="lap-tot" style="text-align:right">${ms<st.mean?'▼':'▲'}</span>
+      <span></span></div>`).join('');
+    return `<div class="det-card">
+      <div class="sec" style="margin-top:0">${esc(op.opName)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">${esc(op.startPoint)}</div>
+      <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <div class="lap-inner" style="max-height:190px">${lRows}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="sec">Zestawienie statystyczne</div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Operacja</th><th>Punkt start.</th><th>n</th><th>Średnia</th><th>Mediana</th><th>P98</th><th>Śr.trim.</th></tr></thead>
+      <tbody>${tRows}</tbody>
+    </table></div>
+    <div class="btn-row" style="margin-bottom:14px">
+      <button class="btn btn-acc" onclick="xXLSX('${key}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Pobierz XLS
+      </button>
+      <button class="btn btn-sec" onclick="xCSV('${key}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Pobierz CSV
+      </button>
+    </div>
+    <div class="sec">Szczegółowe pomiary</div>${details}`;
+}
+
+function emptyReport(){
+  return `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><p>Brak danych</p><span>Dodaj min. 1 operację z ≥10 pomiarami</span></div>`;
+}
+
+function noSel(){
+  return `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 3h14a2 2 0 0 1 2 2v1H3V5a2 2 0 0 1 2-2z"/><rect x="3" y="6" width="18" height="15" rx="1"/></svg><p>Wybierz sesję</p><span>Przejdź do zakładki Sesje</span></div>`;
+}
+
+// ── EXPORT ─────────────────────────────────────────────────
+function resolveOps(key){
+  if(key==='new')return activeSess.ops.filter(o=>o.laps.length>=10);
+  const id=parseInt(key.replace('arch_',''));
+  const s=archive.find(x=>x.id===id);
+  return s?s.ops:[];
+}
+
+function xXLSX(key){
+  const ops=resolveOps(key);
+  if(!ops.length){toast('Brak danych');return}
+  const wb=XLSX.utils.book_new();
+  const sum=[['Operacja','Punkt startowy','n','Średnia (s)','Mediana (s)','P98 (s)','Śr.trim. (s)']];
+  ops.forEach(op=>{const st=stats(op.laps);sum.push([op.opName,op.startPoint,op.laps.length,+(st.mean/1000).toFixed(3),+(st.median/1000).toFixed(3),+(st.p98/1000).toFixed(3),+(st.trim/1000).toFixed(3)]);});
+  const ws0=XLSX.utils.aoa_to_sheet(sum);
+  ws0['!cols']=[22,20,6,12,12,12,12].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb,ws0,'Zestawienie');
+  ops.forEach(op=>{
+    const st=stats(op.laps);
+    const d=[['Operacja:',op.opName],['Punkt startowy:',op.startPoint],['n:',op.laps.length],[],
+      ['Średnia (s):',+(st.mean/1000).toFixed(3)],['Mediana (s):',+(st.median/1000).toFixed(3)],
+      ['P98 (s):',+(st.p98/1000).toFixed(3)],['Śr.trim. (s):',+(st.trim/1000).toFixed(3)],
+      ['Min (s):',+(Math.min(...op.laps)/1000).toFixed(3)],['Max (s):',+(Math.max(...op.laps)/1000).toFixed(3)],
+      [],[`#`,'Pomiar (s)','mm:ss.cc']];
+    op.laps.forEach((ms,i)=>d.push([i+1,+(ms/1000).toFixed(3),fmt(ms)]));
+    const ws=XLSX.utils.aoa_to_sheet(d);ws['!cols']=[{wch:6},{wch:13},{wch:13}];
+    XLSX.utils.book_append_sheet(wb,ws,op.opName.substring(0,28).replace(/[:\\\/\?\*\[\]]/g,'_'));
+  });
+  XLSX.writeFile(wb,'LeanTimer_'+dtag()+'.xlsx');toast('Pobrano XLS');
+}
+
+function xCSV(key){
+  const ops=resolveOps(key);
+  if(!ops.length){toast('Brak danych');return}
+  let csv='Operacja;Punkt startowy;Nr;Czas (s);Srednia (s);Mediana (s);P98 (s);Sr.trim. (s)\n';
+  ops.forEach(op=>{const st=stats(op.laps);op.laps.forEach((ms,i)=>{
+    csv+=[`"${op.opName}"`,`"${op.startPoint}"`,i+1,(ms/1000).toFixed(3),(st.mean/1000).toFixed(3),(st.median/1000).toFixed(3),(st.p98/1000).toFixed(3),(st.trim/1000).toFixed(3)].join(';')+'\n';
+  });});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
+  a.download='LeanTimer_'+dtag()+'.csv';a.click();toast('Pobrano CSV');
+}
+
+// ── STATS ──────────────────────────────────────────────────
+function stats(laps){
+  const n=laps.length,s=[...laps].sort((a,b)=>a-b);
+  const mean=laps.reduce((a,b)=>a+b,0)/n;
+  const median=n%2===0?(s[n/2-1]+s[n/2])/2:s[Math.floor(n/2)];
+  const p98=s[Math.min(Math.ceil(.98*n)-1,n-1)];
+  const tc=Math.max(1,Math.floor(n*.1)),tr=s.slice(tc,n-tc);
+  const trim=tr.length?tr.reduce((a,b)=>a+b,0)/tr.length:mean;
+  return{mean,median,p98,trim};
+}
+
+// ── MODAL ──────────────────────────────────────────────────
+function modal(title,msg,cb,okLabel,okCls){
+  document.getElementById('mTitle').textContent=title;
+  document.getElementById('mMsg').textContent=msg;
+  const ok=document.getElementById('mOk');
+  ok.textContent=okLabel||'Usuń';
+  ok.className='btn '+(okCls||'btn-red');
+  document.getElementById('overlay').classList.add('on');
+  ok.onclick=()=>{closeModal();cb&&cb();};
+}
+function closeModal(){document.getElementById('overlay').classList.remove('on')}
+
+// ── UTILS ──────────────────────────────────────────────────
+function fmt(ms){const cs=Math.floor(ms/10);return pad(Math.floor(ms/60000))+':'+pad(Math.floor(ms/1000)%60)+'.'+pad(cs%100)}
+function pad(n){return String(n).padStart(2,'0')}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function dtag(){return new Date().toISOString().slice(0,10).replace(/-/g,'')}
+function saveArch(){localStorage.setItem('lt_arch',JSON.stringify(archive))}
+function iPlay(){return`<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>`}
+function iPause(){return`<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`}
+
+function updBadges(){
+  const n=archive.length;
+  document.getElementById('archPill').style.display=n?'inline-flex':'none';
+  document.getElementById('archPill').textContent=n+' sesji';
+  document.getElementById('archPillHome').style.display=n?'inline-flex':'none';
+  document.getElementById('archPillHome').textContent=n;
+}
+
+let toastT;
+function toast(m){
+  const el=document.getElementById('toast');
+  el.textContent=m;el.classList.add('on');
+  clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('on'),2200);
+}
+
+// INIT
+updBadges();
+</script>
+</body>
+</html>
