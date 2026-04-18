@@ -365,6 +365,24 @@ function backHome(){stopTmr();updBadges();show('s-home')}
 
 // ── TABS ────────────────────────────────────────────────────
 function newTab(t){
+  if(t!=='pomiar' && curOp && curOp.laps.length>0){
+    modal(
+      'Niezapisane pomiary',
+      'Masz niezapisaną operację "'+curOp.opName+'" z '+curOp.laps.length+' pomiarami. Wyjść bez zapisywania?',
+      ()=>{ stopTmr(); curOp=null;
+        document.getElementById('nSetup').style.display='block';
+        document.getElementById('nTimer').style.display='none';
+        _switchTab(t);
+      },
+      'Wyjdź bez zapisywania',
+      'btn-red'
+    );
+    return;
+  }
+  _switchTab(t);
+}
+
+function _switchTab(t){
   ['pomiar','operacje','raport'].forEach(x=>{
     document.getElementById('nt-'+x).classList.toggle('on',x===t);
     document.getElementById('np-'+x).classList.toggle('on',x===t);
@@ -438,8 +456,7 @@ function recordLap(){
   toast('Pomiar #'+curOp.laps.length+' zarejestrowany');
 }
 
-function finishOp(){
-  if(curOp.laps.length<10){toast('Minimum 10 pomiarów! Masz: '+curOp.laps.length);return}
+function doFinishOp(){
   stopTmr();
   activeSess.ops.push({...curOp,laps:[...curOp.laps]});
   toast('Operacja "'+curOp.opName+'" zapisana');
@@ -449,6 +466,21 @@ function finishOp(){
   document.getElementById('inOp').value='';
   document.getElementById('inSt').value='';
   renderNOps();
+}
+
+function finishOp(){
+  if(!curOp||curOp.laps.length===0){toast('Brak pomiarów');return}
+  if(curOp.laps.length<10){
+    modal(
+      'Za mało pomiarów',
+      'Masz tylko '+curOp.laps.length+' pomiarów (zalecane minimum to 10). Czy mimo to zapisać operację?',
+      ()=>doFinishOp(),
+      'Zapisz mimo to',
+      'btn-acc'
+    );
+    return;
+  }
+  doFinishOp();
 }
 
 // ── LAPS ───────────────────────────────────────────────────
@@ -489,7 +521,7 @@ function updLapCnt(){
   document.getElementById('lapCnt').className='lap-cnt '+(n>=10?'ok':'warn');
   document.getElementById('minF').style.width=pct+'%';
   document.getElementById('minF').className='min-bar-f'+(n>=10?' ok':'');
-  document.getElementById('btnFinOp').disabled=n<10;
+  document.getElementById('btnFinOp').disabled=n<1;
 }
 
 // ── NEW SESSION — OPS TAB ──────────────────────────────────
