@@ -566,11 +566,16 @@ function renderNReport(){
 
 // ── SAVE TO ARCHIVE ────────────────────────────────────────
 function saveSession(){
-  const ops=activeSess.ops;
+  // Jeśli jest aktywna niezapisana operacja z pomiarami - ostrzeż
+  if(curOp && curOp.laps.length>0){
+    toast('Najpierw zakończ aktywną operację przyciskiem "Zakończ operację i zapisz"');
+    return;
+  }
+  const ops=JSON.parse(JSON.stringify(activeSess.ops)); // głęboka kopia
   if(!ops.length){toast('Brak operacji do zapisania');return}
   const few=ops.filter(o=>o.laps.length<10);
   const msg=few.length
-    ? 'Sesja "'+activeSess.name+'" zawiera '+ops.length+' operacji, w tym '+few.length+' z mniej niż 10 pomiarami. Zapisać do archiwum?'
+    ? 'Sesja zawiera '+ops.length+' operacji, w tym '+few.length+' z mniej niż 10 pomiarami. Zapisać do archiwum?'
     : 'Zapisać sesję "'+activeSess.name+'" z '+ops.length+' operacjami do archiwum?';
   modal('Zapisz sesję', msg, ()=>{
     archive.push({id:Date.now(),name:activeSess.name,date:new Date().toISOString(),ops});
