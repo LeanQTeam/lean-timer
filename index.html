@@ -9,7 +9,6 @@
 <title>LeanTimer</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2064%2064%22%3E%3Crect%20width=%2264%22%20height=%2264%22%20rx=%2214%22%20fill=%22#0d1117%22/%3E%3Ctext%20x=%2232%22%20y=%2244%22%20text-anchor=%22middle%22%20font-family=%22Arial,sans-serif%22%20font-weight=%22700%22%20font-size=%2238%22%20fill=%22#e8b84b%22%3ELt%3C/text%3E%3Crect%20x=%2210%22%20y=%2252%22%20width=%2244%22%20height=%224%22%20rx=%222%22%20fill=%22#e8b84b%22%20opacity=%220.35%22/%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%20180%20180%22%3E%3Crect%20width=%22180%22%20height=%22180%22%20rx=%2240%22%20fill=%22#0d1117%22/%3E%3Ctext%20x=%2290%22%20y=%22122%22%20text-anchor=%22middle%22%20font-family=%22Arial,sans-serif%22%20font-weight=%22700%22%20font-size=%22104%22%20fill=%22#e8b84b%22%3ELt%3C/text%3E%3Crect%20x=%2224%22%20y=%22148%22%20width=%22132%22%20height=%228%22%20rx=%224%22%20fill=%22#e8b84b%22%20opacity=%220.3%22/%3E%3C/svg%3E">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 :root{--bg:#0d1117;--surf:#161b22;--surf2:#21262d;--acc:#e8b84b;--red:#c0392b;--green:#3fb950;--text:#e6edf3;--muted:#7d8590;--border:#30363d;--font:'DM Sans',system-ui,sans-serif;--mono:'DM Mono','Courier New',monospace;--r:10px}
@@ -561,15 +560,19 @@ function confirmClearNewOps(){
 
 // ── NEW SESSION — REPORT TAB ───────────────────────────────
 function renderNReport(){
-  const ops=activeSess.ops.filter(o=>o.laps.length>=10);
-  document.getElementById('nReport').innerHTML=ops.length?buildReport(ops,'new'):emptyReport();
+  const ops=activeSess.ops;
+  document.getElementById('nReport').innerHTML=activeSess.ops.length?buildReport(activeSess.ops,'new'):emptyReport();
 }
 
 // ── SAVE TO ARCHIVE ────────────────────────────────────────
 function saveSession(){
-  const ops=activeSess.ops.filter(o=>o.laps.length>=10);
-  if(!ops.length){toast('Brak operacji z min. 10 pomiarami');return}
-  modal('Zapisz sesję','Zapisać sesję "'+activeSess.name+'" z '+ops.length+' operacjami do archiwum?',()=>{
+  const ops=activeSess.ops;
+  if(!ops.length){toast('Brak operacji do zapisania');return}
+  const few=ops.filter(o=>o.laps.length<10);
+  const msg=few.length
+    ? 'Sesja "'+activeSess.name+'" zawiera '+ops.length+' operacji, w tym '+few.length+' z mniej niż 10 pomiarami. Zapisać do archiwum?'
+    : 'Zapisać sesję "'+activeSess.name+'" z '+ops.length+' operacjami do archiwum?';
+  modal('Zapisz sesję', msg, ()=>{
     archive.push({id:Date.now(),name:activeSess.name,date:new Date().toISOString(),ops});
     saveArch(); updBadges(); toast('Sesja zapisana w archiwum'); backHome();
   },'Zapisz','btn-acc');
@@ -711,33 +714,94 @@ function noSel(){
 
 // ── EXPORT ─────────────────────────────────────────────────
 function resolveOps(key){
-  if(key==='new')return activeSess.ops.filter(o=>o.laps.length>=10);
+  if(key==='new')return activeSess.ops;
   const id=parseInt(key.replace('arch_',''));
   const s=archive.find(x=>x.id===id);
   return s?s.ops:[];
 }
 
+// ── PURE JS XLSX GENERATOR ────────────────────────────────
+function buildXLSX(sheets){
+  // sheets = [{name, rows:[[val,...],...]}]
+  const SSF_NUM=2,SSF_STR=3;
+  function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function cellXml(v,si){
+    if(v===null||v===undefined||v==='') return '<c r="'+si+'"><v></v></c>';
+    if(typeof v==='number') return '<c r="'+si+'" t="n"><v>'+v+'</v></c>';
+    return '<c r="'+si+'" t="inlineStr"><is><t>'+esc(String(v))+'</t></is></c>';
+  }
+  function col26(n){let s='';while(n>=0){s=String.fromCharCode(65+(n%26))+s;n=Math.floor(n/26)-1;}return s;}
+  function sheetXml(rows){
+    let xml='<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>';
+    rows.forEach((row,ri)=>{
+      xml+='<row r="'+(ri+1)+'">';
+      row.forEach((v,ci)=>{xml+=cellXml(v,col26(ci)+(ri+1));});
+      xml+='</row>';
+    });
+    xml+='</sheetData></worksheet>';
+    return xml;
+  }
+  // Build zip manually using JSZip-free approach: use base64 encoded minimal xlsx
+  // We'll use a data: URI with CSV fallback — but actually build real xlsx via template
+  // Simple approach: encode as SpreadsheetML XML (Excel 2003 format) which needs no zip
+  let html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
+  html+='<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>';
+  sheets.forEach(s=>{html+='<x:ExcelWorksheet><x:Name>'+esc(s.name)+'</x:Name><x:WorksheetSource HRef="#'+s.name+'"/></x:ExcelWorksheet>';});
+  html+='</x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>';
+  sheets.forEach(s=>{
+    html+='<table id="'+esc(s.name)+'">';
+    s.rows.forEach(row=>{
+      html+='<tr>';
+      row.forEach(v=>{
+        const isNum=typeof v==='number';
+        html+='<td'+(isNum?' style="mso-number-format:0\.000"':'')+'>'+esc(v===null||v===undefined?'':String(v))+'</td>';
+      });
+      html+='</tr>';
+    });
+    html+='</table>';
+  });
+  html+='</body></html>';
+  return html;
+}
+
 function xXLSX(key){
   const ops=resolveOps(key);
   if(!ops.length){toast('Brak danych');return}
-  const wb=XLSX.utils.book_new();
-  const sum=[['Operacja','Punkt startowy','n','Średnia (s)','Mediana (s)','P98 (s)','Śr.trim. (s)']];
-  ops.forEach(op=>{const st=stats(op.laps);sum.push([op.opName,op.startPoint,op.laps.length,+(st.mean/1000).toFixed(3),+(st.median/1000).toFixed(3),+(st.p98/1000).toFixed(3),+(st.trim/1000).toFixed(3)]);});
-  const ws0=XLSX.utils.aoa_to_sheet(sum);
-  ws0['!cols']=[22,20,6,12,12,12,12].map(w=>({wch:w}));
-  XLSX.utils.book_append_sheet(wb,ws0,'Zestawienie');
+
+  const sumRows=[['Operacja','Punkt startowy','n','Srednia (s)','Mediana (s)','P98 (s)','Sr.trim. (s)']];
   ops.forEach(op=>{
     const st=stats(op.laps);
-    const d=[['Operacja:',op.opName],['Punkt startowy:',op.startPoint],['n:',op.laps.length],[],
-      ['Średnia (s):',+(st.mean/1000).toFixed(3)],['Mediana (s):',+(st.median/1000).toFixed(3)],
-      ['P98 (s):',+(st.p98/1000).toFixed(3)],['Śr.trim. (s):',+(st.trim/1000).toFixed(3)],
-      ['Min (s):',+(Math.min(...op.laps)/1000).toFixed(3)],['Max (s):',+(Math.max(...op.laps)/1000).toFixed(3)],
-      [],[`#`,'Pomiar (s)','mm:ss.cc']];
-    op.laps.forEach((ms,i)=>d.push([i+1,+(ms/1000).toFixed(3),fmt(ms)]));
-    const ws=XLSX.utils.aoa_to_sheet(d);ws['!cols']=[{wch:6},{wch:13},{wch:13}];
-    XLSX.utils.book_append_sheet(wb,ws,op.opName.substring(0,28).replace(/[:\\\/\?\*\[\]]/g,'_'));
+    sumRows.push([op.opName,op.startPoint,op.laps.length,
+      +(st.mean/1000).toFixed(3),+(st.median/1000).toFixed(3),
+      +(st.p98/1000).toFixed(3),+(st.trim/1000).toFixed(3)]);
   });
-  XLSX.writeFile(wb,'LeanTimer_'+dtag()+'.xlsx');toast('Pobrano XLS');
+
+  const sheets=[{name:'Zestawienie',rows:sumRows}];
+  ops.forEach(op=>{
+    const st=stats(op.laps);
+    const d=[
+      ['Operacja:',op.opName],['Punkt startowy:',op.startPoint],['n:',op.laps.length],['',''],
+      ['Srednia (s):',+(st.mean/1000).toFixed(3)],
+      ['Mediana (s):',+(st.median/1000).toFixed(3)],
+      ['P98 (s):',+(st.p98/1000).toFixed(3)],
+      ['Sr.trim. (s):',+(st.trim/1000).toFixed(3)],
+      ['Min (s):',+(Math.min(...op.laps)/1000).toFixed(3)],
+      ['Max (s):',+(Math.max(...op.laps)/1000).toFixed(3)],
+      ['',''],
+      ['#','Pomiar (s)','mm:ss.cc']
+    ];
+    op.laps.forEach((ms,i)=>d.push([i+1,+(ms/1000).toFixed(3),fmt(ms)]));
+    const name=op.opName.substring(0,28).replace(/[:\\/\?\*\[\]]/g,'_');
+    sheets.push({name,rows:d});
+  });
+
+  const html=buildXLSX(sheets);
+  const blob=new Blob([html],{type:'application/vnd.ms-excel;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='LeanTimer_'+dtag()+'.xls';
+  a.click();
+  toast('Pobrano XLS');
 }
 
 function xCSV(key){
