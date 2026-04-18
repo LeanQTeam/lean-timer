@@ -164,7 +164,7 @@ tr:last-child td{border-bottom:none}
     <div class="home-hero">
       <div class="hero-clock" id="homeClock">00:00</div>
       <div class="hero-sub">Wybierz tryb pracy</div>
-      <div style="font-size:10px;color:var(--muted);margin-top:8px;font-family:var(--mono)">v1.5 — 2025-04-18</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:8px;font-family:var(--mono)">v2.1 — 2025-04-18</div>
     </div>
     <div class="big-card accent" onclick="goNew()">
       <div class="big-card-ico">
@@ -728,201 +728,194 @@ function resolveOps(key){
 
 // ── PURE JS XLSX GENERATOR (real ZIP-based .xlsx) ───────────
 function makeXLSX(sheets){
-  // sheets = [{name:str, rows:[[val,...],...]}]
+  // sheets = [{name, rows, styles}]
+  // styles = [{row, col, bold, bg, color, border}]  (0-indexed)
+  const enc=new TextEncoder();
   function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
   function col26(n){let s='';do{s=String.fromCharCode(65+(n%26))+s;n=Math.floor(n/26)-1;}while(n>=0);return s;}
-
-  // Shared strings
-  const ss=[]; const ssMap={};
+  const ss=[],ssMap={};
   function si(v){const k=String(v);if(!(k in ssMap)){ssMap[k]=ss.length;ss.push(k);}return ssMap[k];}
 
-  // Build worksheet XML
-  function wsXml(rows){
-    let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>';
+  // Build style index map: "ri,ci" -> xf index
+  function buildStyleIndex(styleList){
+    const map={};
+    if(!styleList) return map;
+    styleList.forEach(s=>{ map[s.row+','+s.col]=s; });
+    return map;
+  }
+
+  // Styles XML - define fills, fonts, xfs
+  // xf 0 = default, 1 = dark header (dark bg, white bold), 2 = section header (dark bg, white), 3 = number
+  function stylesXml(){
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
+    '<fonts count="3">'+
+      '<font><sz val="11"/><name val="Arial"/></font>'+
+      '<font><sz val="11"/><name val="Arial"/><b/><color rgb="FFFFFFFF"/></font>'+
+      '<font><sz val="11"/><name val="Arial"/><color rgb="FFFFFFFF"/></font>'+
+    '</fonts>'+
+    '<fills count="4">'+
+      '<fill><patternFill patternType="none"/></fill>'+
+      '<fill><patternFill patternType="gray125"/></fill>'+
+      '<fill><patternFill patternType="solid"><fgColor rgb="FF1A3C5E"/></patternFill></fill>'+
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFE8F0F7"/></patternFill></fill>'+
+    '</fills>'+
+    '<borders count="2">'+
+      '<border><left/><right/><top/><bottom/><diagonal/></border>'+
+      '<border>'+
+        '<left style="thin"><color rgb="FFB0C4D8"/></left>'+
+        '<right style="thin"><color rgb="FFB0C4D8"/></right>'+
+        '<top style="thin"><color rgb="FFB0C4D8"/></top>'+
+        '<bottom style="thin"><color rgb="FFB0C4D8"/></bottom>'+
+      '</border>'+
+    '</borders>'+
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'+
+    '<cellXfs count="6">'+
+      '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'+
+      '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>'+
+      '<xf numFmtId="0" fontId="2" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>'+
+      '<xf numFmtId="2" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyNumberFormat="1"/>'+
+      '<xf numFmtId="0" fontId="0" fillId="3" borderId="1" xfId="0" applyFill="1" applyBorder="1"/>'+
+      '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>'+
+    '</cellXfs>'+
+    '</styleSheet>';
+  }
+  // xf indices: 0=default, 1=dark+bold+white, 2=dark+white, 3=number+border, 4=light bg+border, 5=border only
+
+  function wsXml(rows, styleMap){
+    // Calculate column widths based on content
+    const widths=[];
+    rows.forEach(row=>{if(!row)return;row.forEach((v,ci)=>{const len=v===null||v===undefined?0:String(v).length;if(!widths[ci]||widths[ci]<len)widths[ci]=len;});});
+    let cols='<cols>';
+    widths.forEach((w,i)=>{if(w)cols+=`<col min="${i+1}" max="${i+1}" width="${Math.min(Math.max(w*1.2+2,8),60)}" customWidth="1"/>`;});
+    cols+='</cols>';
+    let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+cols+'<sheetData>';
     rows.forEach((row,ri)=>{
-      if(!row||!row.length)return;
+      if(!row||!row.length){x+=`<row r="${ri+1}"/>`;return;}
       x+=`<row r="${ri+1}">`;
       row.forEach((v,ci)=>{
         const ref=col26(ci)+(ri+1);
-        if(v===null||v===undefined||v===''){x+=`<c r="${ref}"/>`;return;}
-        if(typeof v==='number'){x+=`<c r="${ref}" t="n"><v>${v}</v></c>`;}
-        else{x+=`<c r="${ref}" t="s"><v>${si(v)}</v></c>`;}
+        const skey=ri+','+ci;
+        const st=styleMap&&styleMap[skey];
+        const xfIdx=st?st.xf:0;
+        const sAttr=xfIdx?` s="${xfIdx}"`:'';
+        if(v===null||v===undefined||v===''){x+=`<c r="${ref}"${sAttr}/>`;return;}
+        if(typeof v==='number'){x+=`<c r="${ref}" t="n"${sAttr}><v>${v}</v></c>`;}
+        else{x+=`<c r="${ref}" t="s"${sAttr}><v>${si(v)}</v></c>`;}
       });
       x+='</row>';
     });
-    x+='</sheetData></worksheet>';
-    return x;
+    return x+'</sheetData></worksheet>';
   }
 
-  // Shared strings XML
+  const wsXmls=sheets.map(s=>wsXml(s.rows, buildStyleIndex(s.styles)));
+
   function ssXml(){
     let x=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${ss.length}" uniqueCount="${ss.length}">`;
     ss.forEach(s=>{x+=`<si><t xml:space="preserve">${esc(s)}</t></si>`;});
     return x+'</sst>';
   }
-
-  // Workbook XML
   function wbXml(){
     let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>';
-    sheets.forEach((s,i)=>{x+=`<sheet name="${esc(s.name)}" sheetId="${i+1}" r:id="rId${i+2}"/>`;});
+    sheets.forEach((s,i)=>{x+=`<sheet name="${esc(s.name)}" sheetId="${i+1}" r:id="rId${i+3}"/>`;});
     return x+'</sheets></workbook>';
   }
-
-  // Rels
   function wbRels(){
-    let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>';
-    sheets.forEach((_,i)=>{x+=`<Relationship Id="rId${i+2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`;});
+    let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>';
+    sheets.forEach((_,i)=>{x+=`<Relationship Id="rId${i+3}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`;});
     return x+'</Relationships>';
   }
-
   function rootRels(){return'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';}
-
-  function ct(){
-    let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>';
+  function ctXml(){
+    let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>';
     sheets.forEach((_,i)=>{x+=`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`;});
     return x+'</Types>';
   }
 
-  // Build sheet XMLs (this populates shared strings as side effect)
-  const wsXmls=sheets.map(s=>wsXml(s.rows));
-
-  // --- Minimal ZIP implementation ---
-  function strToBytes(s){const b=new TextEncoder().encode(s);return b;}
-  function u32le(n){return new Uint8Array([n&0xff,(n>>8)&0xff,(n>>16)&0xff,(n>>24)&0xff]);}
-  function u16le(n){return new Uint8Array([n&0xff,(n>>8)&0xff]);}
-
-  function crc32(buf){
-    let c=0xFFFFFFFF;
-    const t=new Uint32Array(256);
-    for(let i=0;i<256;i++){let k=i;for(let j=0;j<8;j++)k=k&1?(0xEDB88320^(k>>>1)):k>>>1;t[i]=k;}
-    for(let i=0;i<buf.length;i++)c=t[(c^buf[i])&0xff]^(c>>>8);
-    return(c^0xFFFFFFFF)>>>0;
-  }
-
-  function deflate(data){
-    // Use CompressionStream if available, else store uncompressed
-    return data; // fallback: store (method=0)
-  }
-
-  function zipEntry(name,data,offset){
-    const nameBytes=strToBytes(name);
-    const crc=crc32(data);
-    const local=new Uint8Array([
-      0x50,0x4B,0x03,0x04, // sig
-      20,0, // version needed
-      0,0,  // flags
-      0,0,  // compression: store
-      0,0,0,0, // mod time/date
-      ...u32le(crc),
-      ...u32le(data.length),
-      ...u32le(data.length),
-      ...u16le(nameBytes.length),
-      0,0,  // extra len
-      ...nameBytes,
-      ...data
-    ]);
-    const central=new Uint8Array([
-      0x50,0x4B,0x01,0x02, // sig
-      20,0, // version made by
-      20,0, // version needed
-      0,0,  // flags
-      0,0,  // compression: store
-      0,0,0,0, // mod time/date
-      ...u32le(crc),
-      ...u32le(data.length),
-      ...u32le(data.length),
-      ...u16le(nameBytes.length),
-      0,0,  // extra len
-      0,0,  // comment len
-      0,0,  // disk start
-      0,0,  // int attrs
-      0,0,0,0, // ext attrs
-      ...u32le(offset),
-      ...nameBytes
-    ]);
-    return{local,central};
-  }
-
-  function concat(...arrays){
-    const total=arrays.reduce((s,a)=>s+a.length,0);
-    const out=new Uint8Array(total);
-    let off=0;
-    for(const a of arrays){out.set(a,off);off+=a.length;}
-    return out;
-  }
+  const crcTable=(()=>{const t=new Uint32Array(256);for(let i=0;i<256;i++){let c=i;for(let j=0;j<8;j++)c=c&1?(0xEDB88320^(c>>>1)):c>>>1;t[i]=c;}return t;})();
+  function crc32(buf){let c=0xFFFFFFFF;for(let i=0;i<buf.length;i++)c=crcTable[(c^buf[i])&0xff]^(c>>>8);return(c^0xFFFFFFFF)>>>0;}
+  function cat(arrays){const total=arrays.reduce((s,a)=>s+a.length,0);const out=new Uint8Array(total);let off=0;for(const a of arrays){out.set(a,off);off+=a.length;}return out;}
+  function u32(n){return new Uint8Array([n&255,(n>>8)&255,(n>>16)&255,(n>>24)&255]);}
+  function u16(n){return new Uint8Array([n&255,(n>>8)&255]);}
+  function localHdr(name,data){const nb=enc.encode(name);const crc=crc32(data);return cat([new Uint8Array([0x50,0x4B,0x03,0x04,20,0,0,0,0,0,0,0,0,0]),u32(crc),u32(data.length),u32(data.length),u16(nb.length),u16(0),nb,data]);}
+  function centralHdr(name,data,offset){const nb=enc.encode(name);const crc=crc32(data);return cat([new Uint8Array([0x50,0x4B,0x01,0x02,20,0,20,0,0,0,0,0,0,0,0,0]),u32(crc),u32(data.length),u32(data.length),u16(nb.length),u16(0),u16(0),u16(0),u16(0),u32(0),u32(offset),nb]);}
 
   const files=[
-    ['[Content_Types].xml', strToBytes(ct())],
-    ['_rels/.rels', strToBytes(rootRels())],
-    ['xl/workbook.xml', strToBytes(wbXml())],
-    ['xl/_rels/workbook.xml.rels', strToBytes(wbRels())],
-    ['xl/sharedStrings.xml', strToBytes(ssXml())],
-    ...wsXmls.map((x,i)=>[`xl/worksheets/sheet${i+1}.xml`, strToBytes(x)])
+    ['[Content_Types].xml',enc.encode(ctXml())],
+    ['_rels/.rels',enc.encode(rootRels())],
+    ['xl/workbook.xml',enc.encode(wbXml())],
+    ['xl/_rels/workbook.xml.rels',enc.encode(wbRels())],
+    ['xl/sharedStrings.xml',enc.encode(ssXml())],
+    ['xl/styles.xml',enc.encode(stylesXml())],
+    ...wsXmls.map((x,i)=>[`xl/worksheets/sheet${i+1}.xml`,enc.encode(x)])
   ];
-
-  const locals=[];
-  const centrals=[];
+  const locals=[],centrals=[];
   let offset=0;
   for(const [name,data] of files){
-    const {local,central}=zipEntry(name,data,offset);
-    locals.push(local);
-    centrals.push(central);
-    offset+=local.length;
+    locals.push(localHdr(name,data));
+    centrals.push(centralHdr(name,data,offset));
+    offset+=locals[locals.length-1].length;
   }
-
-  const cdSize=centrals.reduce((s,c)=>s+c.length,0);
-  const eocd=new Uint8Array([
-    0x50,0x4B,0x05,0x06, // sig
-    0,0, // disk
-    0,0, // cd disk
-    ...u16le(files.length),
-    ...u16le(files.length),
-    ...u32le(cdSize),
-    ...u32le(offset),
-    0,0  // comment len
-  ]);
-
-  return concat(...locals,...centrals,eocd);
+  const cd=cat(centrals);
+  const eocd=cat([new Uint8Array([0x50,0x4B,0x05,0x06,0,0,0,0]),u16(files.length),u16(files.length),u32(cd.length),u32(offset),u16(0)]);
+  return cat([...locals,cd,eocd]);
 }
-
 function xXLSX(key){
   const ops=resolveOps(key);
   if(!ops.length){toast('Brak danych');return}
 
-  // Zakładka Zestawienie — układ jak w załączniku
-  // Dla każdej operacji: nagłówek, wiersz statystyk, puste, lista pomiarów
-  const sumRows=[['Operacja','Punkt startowy','n','Srednia (s)','Mediana (s)','P98 (s)','Sr.trim. (s)']];
+  const rows=[];
+  const styles=[];
+  const HDR=['Operacja','Punkt startowy','n','Srednia (s)','Mediana (s)','P98 (s)','Sr.trim. (s)'];
+  const NCOLS=7;
+
+  function addHdr(ri){
+    for(let c=0;c<NCOLS;c++) styles.push({row:ri,col:c,xf:1}); // dark+bold+white
+  }
+  function addDataRow(ri){
+    for(let c=0;c<NCOLS;c++) styles.push({row:ri,col:c,xf:c>=2?3:5}); // number or border
+  }
+  function addSectionHdr(ri){
+    styles.push({row:ri,col:0,xf:2}); // dark+white
+    styles.push({row:ri,col:1,xf:2});
+  }
+  function addLapHdr(ri){
+    for(let c=0;c<3;c++) styles.push({row:ri,col:c,xf:1});
+  }
+  function addLapRow(ri){
+    for(let c=0;c<3;c++) styles.push({row:ri,col:c,xf:c>0?3:5});
+  }
+
+  // Tabela podsumowania
+  addHdr(rows.length); rows.push(HDR);
   ops.forEach(op=>{
     const st=stats(op.laps);
-    sumRows.push([op.opName,op.startPoint,op.laps.length,
+    addDataRow(rows.length);
+    rows.push([op.opName,op.startPoint,op.laps.length,
       +(st.mean/1000).toFixed(3),+(st.median/1000).toFixed(3),
       +(st.p98/1000).toFixed(3),+(st.trim/1000).toFixed(3)]);
   });
 
-  const sheets=[{name:'Zestawienie',rows:sumRows}];
-
-  // Osobna zakładka dla każdej operacji z pełnymi danymi
+  // Rozwinięcie każdej operacji
   ops.forEach(op=>{
     const st=stats(op.laps);
-    const rows=[
-      ['Operacja:',op.opName],
-      ['Punkt startowy:',op.startPoint],
-      ['Liczba pomiarow:',op.laps.length],
-      ['',''],
-      ['Srednia (s):',+(st.mean/1000).toFixed(3)],
-      ['Mediana (s):',+(st.median/1000).toFixed(3)],
-      ['P98 (s):',+(st.p98/1000).toFixed(3)],
-      ['Sr.trim. (s):',+(st.trim/1000).toFixed(3)],
-      ['Min (s):',+(Math.min(...op.laps)/1000).toFixed(3)],
-      ['Max (s):',+(Math.max(...op.laps)/1000).toFixed(3)],
-      ['',''],
-      ['#','Pomiar (s)','mm:ss.cc']
-    ];
-    op.laps.forEach((ms,i)=>rows.push([i+1,+(ms/1000).toFixed(3),fmt(ms)]));
-    const name=op.opName.substring(0,28).replace(/[:\\/\?\*\[\]]/g,'_')||'Op'+(sheets.length);
-    sheets.push({name,rows});
+    rows.push([]); // pusty wiersz
+    addSectionHdr(rows.length);
+    rows.push(['Operacja:',op.opName]);
+    addSectionHdr(rows.length);
+    rows.push(['Punkt startowy:',op.startPoint]);
+    rows.push([]); // pusty wiersz
+    addHdr(rows.length); rows.push(HDR);
+    addDataRow(rows.length);
+    rows.push([op.opName,op.startPoint,op.laps.length,
+      +(st.mean/1000).toFixed(3),+(st.median/1000).toFixed(3),
+      +(st.p98/1000).toFixed(3),+(st.trim/1000).toFixed(3)]);
+    rows.push([]); // pusty wiersz
+    addLapHdr(rows.length); rows.push(['#','Pomiar (s)','mm:ss.cc']);
+    op.laps.forEach((ms,i)=>{addLapRow(rows.length);rows.push([i+1,+(ms/1000).toFixed(3),fmt(ms)]);});
   });
 
+  const sheets=[{name:'Zestawienie',rows,styles}];
   const data=makeXLSX(sheets);
   const blob=new Blob([data],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const a=document.createElement('a');
