@@ -164,7 +164,7 @@ tr:last-child td{border-bottom:none}
     <div class="home-hero">
       <div class="hero-clock" id="homeClock">00:00</div>
       <div class="hero-sub">Wybierz tryb pracy</div>
-      <div style="font-size:10px;color:var(--muted);margin-top:8px;font-family:var(--mono)">v1.4 — 2025-04-18</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:8px;font-family:var(--mono)">v1.5 — 2025-04-18</div>
     </div>
     <div class="big-card accent" onclick="goNew()">
       <div class="big-card-ico">
@@ -726,54 +726,171 @@ function resolveOps(key){
   return s?s.ops:[];
 }
 
-// ── PURE JS XLSX GENERATOR ────────────────────────────────
-function buildXLSX(sheets){
-  // sheets = [{name, rows:[[val,...],...]}]
-  const SSF_NUM=2,SSF_STR=3;
+// ── PURE JS XLSX GENERATOR (real ZIP-based .xlsx) ───────────
+function makeXLSX(sheets){
+  // sheets = [{name:str, rows:[[val,...],...]}]
   function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-  function cellXml(v,si){
-    if(v===null||v===undefined||v==='') return '<c r="'+si+'"><v></v></c>';
-    if(typeof v==='number') return '<c r="'+si+'" t="n"><v>'+v+'</v></c>';
-    return '<c r="'+si+'" t="inlineStr"><is><t>'+esc(String(v))+'</t></is></c>';
-  }
-  function col26(n){let s='';while(n>=0){s=String.fromCharCode(65+(n%26))+s;n=Math.floor(n/26)-1;}return s;}
-  function sheetXml(rows){
-    let xml='<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>';
+  function col26(n){let s='';do{s=String.fromCharCode(65+(n%26))+s;n=Math.floor(n/26)-1;}while(n>=0);return s;}
+
+  // Shared strings
+  const ss=[]; const ssMap={};
+  function si(v){const k=String(v);if(!(k in ssMap)){ssMap[k]=ss.length;ss.push(k);}return ssMap[k];}
+
+  // Build worksheet XML
+  function wsXml(rows){
+    let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>';
     rows.forEach((row,ri)=>{
-      xml+='<row r="'+(ri+1)+'">';
-      row.forEach((v,ci)=>{xml+=cellXml(v,col26(ci)+(ri+1));});
-      xml+='</row>';
-    });
-    xml+='</sheetData></worksheet>';
-    return xml;
-  }
-  // Build zip manually using JSZip-free approach: use base64 encoded minimal xlsx
-  // We'll use a data: URI with CSV fallback — but actually build real xlsx via template
-  // Simple approach: encode as SpreadsheetML XML (Excel 2003 format) which needs no zip
-  let html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
-  html+='<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>';
-  sheets.forEach(s=>{html+='<x:ExcelWorksheet><x:Name>'+esc(s.name)+'</x:Name><x:WorksheetSource HRef="#'+s.name+'"/></x:ExcelWorksheet>';});
-  html+='</x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>';
-  sheets.forEach(s=>{
-    html+='<table id="'+esc(s.name)+'">';
-    s.rows.forEach(row=>{
-      html+='<tr>';
-      row.forEach(v=>{
-        const isNum=typeof v==='number';
-        html+='<td'+(isNum?' style="mso-number-format:0\.000"':'')+'>'+esc(v===null||v===undefined?'':String(v))+'</td>';
+      if(!row||!row.length)return;
+      x+=`<row r="${ri+1}">`;
+      row.forEach((v,ci)=>{
+        const ref=col26(ci)+(ri+1);
+        if(v===null||v===undefined||v===''){x+=`<c r="${ref}"/>`;return;}
+        if(typeof v==='number'){x+=`<c r="${ref}" t="n"><v>${v}</v></c>`;}
+        else{x+=`<c r="${ref}" t="s"><v>${si(v)}</v></c>`;}
       });
-      html+='</tr>';
+      x+='</row>';
     });
-    html+='</table>';
-  });
-  html+='</body></html>';
-  return html;
+    x+='</sheetData></worksheet>';
+    return x;
+  }
+
+  // Shared strings XML
+  function ssXml(){
+    let x=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${ss.length}" uniqueCount="${ss.length}">`;
+    ss.forEach(s=>{x+=`<si><t xml:space="preserve">${esc(s)}</t></si>`;});
+    return x+'</sst>';
+  }
+
+  // Workbook XML
+  function wbXml(){
+    let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>';
+    sheets.forEach((s,i)=>{x+=`<sheet name="${esc(s.name)}" sheetId="${i+1}" r:id="rId${i+2}"/>`;});
+    return x+'</sheets></workbook>';
+  }
+
+  // Rels
+  function wbRels(){
+    let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>';
+    sheets.forEach((_,i)=>{x+=`<Relationship Id="rId${i+2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`;});
+    return x+'</Relationships>';
+  }
+
+  function rootRels(){return'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';}
+
+  function ct(){
+    let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>';
+    sheets.forEach((_,i)=>{x+=`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`;});
+    return x+'</Types>';
+  }
+
+  // Build sheet XMLs (this populates shared strings as side effect)
+  const wsXmls=sheets.map(s=>wsXml(s.rows));
+
+  // --- Minimal ZIP implementation ---
+  function strToBytes(s){const b=new TextEncoder().encode(s);return b;}
+  function u32le(n){return new Uint8Array([n&0xff,(n>>8)&0xff,(n>>16)&0xff,(n>>24)&0xff]);}
+  function u16le(n){return new Uint8Array([n&0xff,(n>>8)&0xff]);}
+
+  function crc32(buf){
+    let c=0xFFFFFFFF;
+    const t=new Uint32Array(256);
+    for(let i=0;i<256;i++){let k=i;for(let j=0;j<8;j++)k=k&1?(0xEDB88320^(k>>>1)):k>>>1;t[i]=k;}
+    for(let i=0;i<buf.length;i++)c=t[(c^buf[i])&0xff]^(c>>>8);
+    return(c^0xFFFFFFFF)>>>0;
+  }
+
+  function deflate(data){
+    // Use CompressionStream if available, else store uncompressed
+    return data; // fallback: store (method=0)
+  }
+
+  function zipEntry(name,data,offset){
+    const nameBytes=strToBytes(name);
+    const crc=crc32(data);
+    const local=new Uint8Array([
+      0x50,0x4B,0x03,0x04, // sig
+      20,0, // version needed
+      0,0,  // flags
+      0,0,  // compression: store
+      0,0,0,0, // mod time/date
+      ...u32le(crc),
+      ...u32le(data.length),
+      ...u32le(data.length),
+      ...u16le(nameBytes.length),
+      0,0,  // extra len
+      ...nameBytes,
+      ...data
+    ]);
+    const central=new Uint8Array([
+      0x50,0x4B,0x01,0x02, // sig
+      20,0, // version made by
+      20,0, // version needed
+      0,0,  // flags
+      0,0,  // compression: store
+      0,0,0,0, // mod time/date
+      ...u32le(crc),
+      ...u32le(data.length),
+      ...u32le(data.length),
+      ...u16le(nameBytes.length),
+      0,0,  // extra len
+      0,0,  // comment len
+      0,0,  // disk start
+      0,0,  // int attrs
+      0,0,0,0, // ext attrs
+      ...u32le(offset),
+      ...nameBytes
+    ]);
+    return{local,central};
+  }
+
+  function concat(...arrays){
+    const total=arrays.reduce((s,a)=>s+a.length,0);
+    const out=new Uint8Array(total);
+    let off=0;
+    for(const a of arrays){out.set(a,off);off+=a.length;}
+    return out;
+  }
+
+  const files=[
+    ['[Content_Types].xml', strToBytes(ct())],
+    ['_rels/.rels', strToBytes(rootRels())],
+    ['xl/workbook.xml', strToBytes(wbXml())],
+    ['xl/_rels/workbook.xml.rels', strToBytes(wbRels())],
+    ['xl/sharedStrings.xml', strToBytes(ssXml())],
+    ...wsXmls.map((x,i)=>[`xl/worksheets/sheet${i+1}.xml`, strToBytes(x)])
+  ];
+
+  const locals=[];
+  const centrals=[];
+  let offset=0;
+  for(const [name,data] of files){
+    const {local,central}=zipEntry(name,data,offset);
+    locals.push(local);
+    centrals.push(central);
+    offset+=local.length;
+  }
+
+  const cdSize=centrals.reduce((s,c)=>s+c.length,0);
+  const eocd=new Uint8Array([
+    0x50,0x4B,0x05,0x06, // sig
+    0,0, // disk
+    0,0, // cd disk
+    ...u16le(files.length),
+    ...u16le(files.length),
+    ...u32le(cdSize),
+    ...u32le(offset),
+    0,0  // comment len
+  ]);
+
+  return concat(...locals,...centrals,eocd);
 }
 
 function xXLSX(key){
   const ops=resolveOps(key);
   if(!ops.length){toast('Brak danych');return}
 
+  // Zakładka Zestawienie — układ jak w załączniku
+  // Dla każdej operacji: nagłówek, wiersz statystyk, puste, lista pomiarów
   const sumRows=[['Operacja','Punkt startowy','n','Srednia (s)','Mediana (s)','P98 (s)','Sr.trim. (s)']];
   ops.forEach(op=>{
     const st=stats(op.laps);
@@ -783,10 +900,15 @@ function xXLSX(key){
   });
 
   const sheets=[{name:'Zestawienie',rows:sumRows}];
+
+  // Osobna zakładka dla każdej operacji z pełnymi danymi
   ops.forEach(op=>{
     const st=stats(op.laps);
-    const d=[
-      ['Operacja:',op.opName],['Punkt startowy:',op.startPoint],['n:',op.laps.length],['',''],
+    const rows=[
+      ['Operacja:',op.opName],
+      ['Punkt startowy:',op.startPoint],
+      ['Liczba pomiarow:',op.laps.length],
+      ['',''],
       ['Srednia (s):',+(st.mean/1000).toFixed(3)],
       ['Mediana (s):',+(st.median/1000).toFixed(3)],
       ['P98 (s):',+(st.p98/1000).toFixed(3)],
@@ -796,18 +918,18 @@ function xXLSX(key){
       ['',''],
       ['#','Pomiar (s)','mm:ss.cc']
     ];
-    op.laps.forEach((ms,i)=>d.push([i+1,+(ms/1000).toFixed(3),fmt(ms)]));
-    const name=op.opName.substring(0,28).replace(/[:\\/\?\*\[\]]/g,'_');
-    sheets.push({name,rows:d});
+    op.laps.forEach((ms,i)=>rows.push([i+1,+(ms/1000).toFixed(3),fmt(ms)]));
+    const name=op.opName.substring(0,28).replace(/[:\\/\?\*\[\]]/g,'_')||'Op'+(sheets.length);
+    sheets.push({name,rows});
   });
 
-  const html=buildXLSX(sheets);
-  const blob=new Blob([html],{type:'application/vnd.ms-excel;charset=utf-8'});
+  const data=makeXLSX(sheets);
+  const blob=new Blob([data],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download='LeanTimer_'+dtag()+'.xls';
+  a.download='LeanTimer_'+dtag()+'.xlsx';
   a.click();
-  toast('Pobrano XLS');
+  toast('Pobrano XLSX');
 }
 
 function xCSV(key){
